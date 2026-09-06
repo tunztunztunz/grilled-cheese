@@ -12,6 +12,12 @@ const (
 	StatusRejected Status = "rejected"
 )
 
+// Valid reports whether s is one of the three known statuses. Anything else is
+// caller error: the page styles a card by status and has no fallback.
+func (s Status) Valid() bool {
+	return s == StatusOpen || s == StatusSettled || s == StatusRejected
+}
+
 // Kind is how the user answered: picked an option, rejected the proposal
 // outright, or wrote prose.
 type Kind string
@@ -21,6 +27,12 @@ const (
 	KindReject Kind = "reject"
 	KindText   Kind = "text"
 )
+
+// Valid reports whether k is one of the three known kinds. Anything else is
+// caller error: the page renders a user entry by switching on it.
+func (k Kind) Valid() bool {
+	return k == KindOption || k == KindReject || k == KindText
+}
 
 // Entry is one turn in a question's thread. Kind and Option carry meaning only
 // when From is "user".
@@ -73,8 +85,8 @@ func (r *Round) Complete() bool {
 	return true
 }
 
-// State is the whole session. The serving process is its only writer; the
-// browser and the agent both mutate it through the HTTP API.
+// State is the whole session, persisted as state.json. Only the serving process
+// holds one; see server for the writer invariant.
 type State struct {
 	Purpose string   `json:"purpose"`
 	Rounds  []*Round `json:"rounds"`

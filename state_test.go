@@ -39,6 +39,9 @@ func TestSession(t *testing.T) {
 	if code, _ := do("POST", "/submit", `{"id":"nope","kind":"reject"}`); code != 400 {
 		t.Errorf("submit to unknown id: got %d, want 400", code)
 	}
+	if code, _ := do("POST", "/submit", `{"id":"r1q1","kind":"shrug"}`); code != 400 {
+		t.Errorf("submit with unknown kind: got %d, want 400", code)
+	}
 
 	if code, _ := do("POST", "/submit", `{"id":"r1q2","kind":"option","option":1}`); code != 200 {
 		t.Fatal("submit r1q2")
@@ -117,9 +120,9 @@ func TestStaleBuild(t *testing.T) {
 	}
 }
 
-// TestRejectedStatusIsInvalidInput pins the status enum: anything outside the
-// three known values is a 400, not a silently stored string.
-func TestRejectedStatusIsInvalidInput(t *testing.T) {
+// TestUnknownStatusIsRejected pins the status enum: anything outside the three
+// known values is a 400, not a silently stored string.
+func TestUnknownStatusIsRejected(t *testing.T) {
 	s, _ := newServer(t.TempDir())
 	mux := s.routes()
 	mux.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("POST", "/ask", strings.NewReader(`{"questions":[{"title":"A"}]}`)))

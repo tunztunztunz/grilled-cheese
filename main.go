@@ -11,6 +11,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -69,15 +70,16 @@ func defaultWorkdir() string {
 	return filepath.Join("/tmp", fmt.Sprintf("grilled-cheese-%d", os.Getuid()))
 }
 
-// flags builds a flag set carrying the --workdir every subcommand needs.
-func flags(name string, args []string, extra func(*flag.FlagSet)) (string, error) {
+// flags parses the --workdir every subcommand needs. ExitOnError means a bad
+// flag exits here, so there is no parse error for callers to handle.
+func flags(name string, args []string, extra func(*flag.FlagSet)) string {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
 	dir := fs.String("workdir", defaultWorkdir(), "session directory")
 	if extra != nil {
 		extra(fs)
 	}
-	err := fs.Parse(args)
-	return *dir, err
+	fs.Parse(args)
+	return *dir
 }
 
 // serve hosts the UI and owns the session state until it is signalled. It
@@ -86,22 +88,19 @@ func flags(name string, args []string, extra func(*flag.FlagSet)) (string, error
 func serve(args []string) error {
 	var addr string
 	var demo, open bool
-	workdir, err := flags("serve", args, func(fs *flag.FlagSet) {
+	workdir := flags("serve", args, func(fs *flag.FlagSet) {
 		fs.StringVar(&addr, "addr", "127.0.0.1:0", "listen address")
 		fs.BoolVar(&demo, "demo", false, "seed a fixture round for UI work")
 		fs.BoolVar(&open, "open", true, "open the page in a browser")
 	})
-	if err != nil {
-		return err
-	}
 
 	if err := os.MkdirAll(workdir, 0o755); err != nil {
 		return err
 	}
-	// Two servers sharing a workdir would both write state.json, which is the
-	// one thing the whole design rules out. This probes the same way clients do,
-	// since a direct dial cannot see a server hosted outside this namespace and
-	// would happily clobber its addr file.
+	// Two servers sharing a workdir would both write state.json, which the
+	// single-writer design rules out. The probe goes through call() rather than
+	// a direct dial: a server outside this network namespace answers only over
+	// the proxy route, and missing it would clobber a live session's addr file.
 	if _, err := call(workdir, "GET", "/state?since=-1", nil); err == nil {
 		live, _ := os.ReadFile(filepath.Join(workdir, "addr"))
 		return fmt.Errorf("a session is already serving %s at http://%s", workdir, live)
@@ -124,14 +123,12 @@ func serve(args []string) error {
 	if err != nil {
 		return err
 	}
-	// Clients discover the port here, so a second session only needs its own
-	// --workdir to stay out of this one's way.
 	addrPath := filepath.Join(workdir, "addr")
 	if err := os.WriteFile(addrPath, []byte(ln.Addr().String()), 0o644); err != nil {
 		return err
 	}
-	// Drop the pointer on a graceful stop. A killed server still cannot, which
-	// is why call() treats an unreachable address as a dead session.
+	// A killed server cannot drop its addr file, which is why call() treats an
+	// unreachable address as a dead session rather than a transport failure.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {
@@ -140,34 +137,34 @@ func serve(args []string) error {
 		os.Exit(0)
 	}()
 
-	url := "http://" + ln.Addr().String()
-	fmt.Println(url)
+	page := "http://" + ln.Addr().String()
 	if open {
-		if err := openBrowser(url); err != nil {
-			log.Printf("could not open a browser (%v) — visit %s", err, url)
-		}
+		show(page)
+	} else {
+		fmt.Println(page)
 	}
 	return http.Serve(ln, s.routes())
 }
 
-// openBrowser shows url, preferring $BROWSER over the desktop default so a
-// configured launcher wins. It does not wait: the browser outlives this call.
-func openBrowser(url string) error {
+// show prints the page URL and opens it, preferring $BROWSER over the desktop
+// default so a configured launcher wins. It does not wait for the browser, and
+// reports a failed launch without failing the command: the URL is already out.
+func show(page string) {
+	fmt.Println(page)
 	launcher := os.Getenv("BROWSER")
 	if launcher == "" {
 		launcher = "xdg-open"
 	}
-	return exec.Command(launcher, url).Start()
+	if err := exec.Command(launcher, page).Start(); err != nil {
+		log.Printf("could not open a browser (%v) — visit %s", err, page)
+	}
 }
 
 // newCmd claims a running server for a fresh grilling: it clears whatever the
 // last session left behind and shows the empty board. This is how a session
 // starts when the server has been up since login rather than started by hand.
 func newCmd(args []string) error {
-	workdir, err := flags("new", args, nil)
-	if err != nil {
-		return err
-	}
+	workdir := flags("new", args, nil)
 	if err := checkFresh(workdir); err != nil {
 		return err
 	}
@@ -178,11 +175,7 @@ func newCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	url := "http://" + string(addr)
-	fmt.Println(url)
-	if err := openBrowser(url); err != nil {
-		log.Printf("could not open a browser (%v) — visit %s", err, url)
-	}
+	show("http://" + string(addr))
 	return nil
 }
 
@@ -214,10 +207,7 @@ func checkFresh(workdir string) error {
 // question ids. The round is parsed locally first, so a malformed one fails
 // here rather than as an opaque 400.
 func ask(args []string) error {
-	workdir, err := flags("ask", args, nil)
-	if err != nil {
-		return err
-	}
+	workdir := flags("ask", args, nil)
 	body, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return err
@@ -238,10 +228,7 @@ func ask(args []string) error {
 // payload, and exits. It must run in the foreground: a backgrounded caller can
 // land in a network namespace with no route to the server.
 func waitCmd(args []string) error {
-	workdir, err := flags("wait", args, nil)
-	if err != nil {
-		return err
-	}
+	workdir := flags("wait", args, nil)
 	// The server returns 204 when its long poll expires with nothing to do;
 	// reconnecting keeps the block invisible to the caller.
 	for {
@@ -260,17 +247,13 @@ func waitCmd(args []string) error {
 // stdin because it is HTML, which does not survive a shell argument intact.
 func reply(args []string) error {
 	var id, status string
-	workdir, err := flags("reply", args, func(fs *flag.FlagSet) {
+	workdir := flags("reply", args, func(fs *flag.FlagSet) {
 		fs.StringVar(&id, "id", "", "question id")
 		fs.StringVar(&status, "status", "", "open, settled or rejected")
 	})
-	if err != nil {
-		return err
-	}
 	if id == "" || status == "" {
-		return fmt.Errorf("--id and --status are required")
+		return errors.New("--id and --status are required")
 	}
-	// The note is HTML, which does not survive a shell argument intact.
 	note, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return err
@@ -289,26 +272,18 @@ func call(workdir, method, path string, body any) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("no session in %s: is `grilled-cheese serve` running?", workdir)
 	}
-	// A killed server leaves its addr file behind, so the file existing proves
-	// nothing about the session being alive or routable from here. The remedy
-	// is the same either way, so the message names it in full.
-	unreachable := func() error {
-		return fmt.Errorf("cannot reach the session at %s — the server is not running, or not reachable from here.\n"+
-			"Start it in a terminal with:  grilled-cheese serve --workdir %s", addr, workdir)
-	}
-
 	var payload []byte
 	if body != nil {
 		if payload, err = json.Marshal(body); err != nil {
 			return nil, err
 		}
 	}
-	url := "http://" + string(addr) + path
+	endpoint := "http://" + string(addr) + path
 
 	for _, client := range routes() {
-		out, status, err := send(client, method, url, payload)
+		out, status, err := send(client, method, endpoint, payload)
 		if err != nil {
-			continue // this route cannot reach the server; try the next
+			continue
 		}
 		// A proxy that cannot reach the server answers 502 or 504 on its own
 		// behalf. The session server emits neither, so these mean the route
@@ -322,7 +297,11 @@ func call(workdir, method, path string, body any) ([]byte, error) {
 		}
 		return out, nil
 	}
-	return nil, unreachable()
+	// A killed server leaves its addr file behind, so the file existing proves
+	// nothing about the session being alive or routable from here. The remedy is
+	// the same either way, so the message names it in full.
+	return nil, fmt.Errorf("cannot reach the session at %s — the server is not running, or not reachable from here.\n"+
+		"Start it in a terminal with:  grilled-cheese serve --workdir %s", addr, workdir)
 }
 
 // reachedBy remembers the route that worked, so a `wait` loop does not retry a
@@ -346,12 +325,12 @@ func routes() []*http.Client {
 
 // send reports the transport error separately from the HTTP status, so only an
 // unreachable route falls through to the next one.
-func send(client *http.Client, method, url string, payload []byte) ([]byte, int, error) {
+func send(client *http.Client, method, endpoint string, payload []byte) ([]byte, int, error) {
 	var buf io.Reader
 	if payload != nil {
 		buf = bytes.NewReader(payload)
 	}
-	req, err := http.NewRequestWithContext(context.Background(), method, url, buf)
+	req, err := http.NewRequestWithContext(context.Background(), method, endpoint, buf)
 	if err != nil {
 		return nil, 0, err
 	}

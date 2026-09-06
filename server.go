@@ -100,8 +100,9 @@ func (s *server) waitFor(ctx context.Context, since int) int {
 	return s.version
 }
 
-// routes serves the embedded UI alongside the browser API (/state, /submit) and
-// the agent API (/wait, /ask, /reply).
+// routes serves the embedded UI alongside two APIs that differ in who blocks on
+// them: the browser polls /state and posts /submit, the agent blocks on /wait
+// and posts /ask and /reply.
 func (s *server) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	// The API patterns below are more specific, so they win over this catch-all.
@@ -142,7 +143,12 @@ func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 	if rounds == nil {
 		rounds = []*Round{}
 	}
-	writeJSON(w, stateView{v, s.state.Purpose, rounds, s.state.RoundComplete()})
+	writeJSON(w, stateView{
+		Version:       v,
+		Purpose:       s.state.Purpose,
+		Rounds:        rounds,
+		RoundComplete: s.state.RoundComplete(),
+	})
 }
 
 // submission is one user answer awaiting an agent reply.
@@ -176,12 +182,23 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 		subs := []submission{}
 		for _, question := range s.state.Pending() {
 			last := question.Entries[len(question.Entries)-1]
-			subs = append(subs, submission{question.ID, question.Title, last.Kind, last.Option, last.Body})
+			subs = append(subs, submission{
+				ID:     question.ID,
+				Title:  question.Title,
+				Kind:   last.Kind,
+				Option: last.Option,
+				Body:   last.Body,
+			})
 		}
 		s.mu.Unlock()
 
 		if len(subs) > 0 || done {
-			writeJSON(w, waitView{waitInstructions, v, done, subs})
+			writeJSON(w, waitView{
+				Instructions:  waitInstructions,
+				Version:       v,
+				RoundComplete: done,
+				Submissions:   subs,
+			})
 			return
 		}
 		select {
@@ -242,7 +259,8 @@ func (s *server) handleNew(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSubmit records a user answer. Unknown, closed, and already-answered
-// questions are rejected, so a stale tab cannot submit twice.
+// questions are rejected, so a stale tab cannot submit twice, and an unknown
+// kind is rejected here because the page renders an entry by switching on it.
 func (s *server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		ID     string `json:"id"`
@@ -262,6 +280,8 @@ func (s *server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("question %q is already %s", in.ID, question.Status)
 		case question.Pending():
 			return fmt.Errorf("question %q is awaiting an agent reply", in.ID)
+		case !in.Kind.Valid():
+			return fmt.Errorf("bad kind %q", in.Kind)
 		}
 		question.Entries = append(question.Entries, Entry{From: "user", Kind: in.Kind, Option: in.Option, Body: in.Body, At: time.Now()})
 		return nil
@@ -339,12 +359,10 @@ func (s *server) handleReply(w http.ResponseWriter, r *http.Request) {
 	}
 	err := s.mutate(func() error {
 		question := s.state.find(in.ID)
-		if question == nil {
+		switch {
+		case question == nil:
 			return fmt.Errorf("unknown question %q", in.ID)
-		}
-		switch in.Status {
-		case StatusOpen, StatusSettled, StatusRejected:
-		default:
+		case !in.Status.Valid():
 			return fmt.Errorf("bad status %q", in.Status)
 		}
 		question.Status = in.Status
@@ -373,8 +391,8 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
-// respond turns a rejected mutation into a 400 so that `grill reply --id typo`
-// exits non-zero instead of vanishing.
+// respond turns a rejected mutation into a 400, so that a bad `grilled-cheese
+// reply --id` exits non-zero instead of vanishing.
 func respond(w http.ResponseWriter, err error, body map[string]any) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

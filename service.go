@@ -20,10 +20,7 @@ const serviceName = "grilled-cheese"
 // The unit points at this executable, so re-running after an upgrade is what
 // moves the service onto the new binary.
 func installService(args []string) error {
-	workdir, err := flags("install-service", args, nil)
-	if err != nil {
-		return err
-	}
+	workdir := flags("install-service", args, nil)
 	exe, err := os.Executable()
 	if err != nil {
 		return err
