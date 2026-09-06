@@ -1,4 +1,4 @@
-// Command grill runs the browser UI for a grilling session.
+// Command grilled-cheese runs the browser UI for a grilling session.
 //
 // The agent drives it: `serve` hosts the page, `ask` pushes a round of
 // questions, `wait` blocks until the user has answered something, and `reply`
@@ -31,13 +31,14 @@ var demoJSON []byte
 
 func main() {
 	log.SetFlags(0)
-	log.SetPrefix("grill: ")
+	log.SetPrefix("grilled-cheese: ")
 
 	if len(os.Args) < 2 {
 		usage()
 	}
 	cmds := map[string]func([]string) error{
 		"serve": serve, "new": newCmd, "ask": ask, "wait": waitCmd, "reply": reply,
+		"install-service": installService,
 	}
 	run, ok := cmds[os.Args[1]]
 	if !ok {
@@ -49,22 +50,29 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `usage: grilled-cheese <serve|new|ask|wait|reply> [flags]
+	fmt.Fprintln(os.Stderr, `usage: grilled-cheese <command> [flags]
 
-  serve   host the UI and own the session state
-  new     clear the session and open the page in a browser
-  ask     push a round of questions, read as JSON on stdin
-  wait    block until the user answers or the round completes
-  reply   respond to one submission, note read from stdin`)
+  install-service   register a systemd user service and start it
+  serve             host the UI and own the session state
+  new               clear the session and open the page in a browser
+  ask               push a round of questions, read as JSON on stdin
+  wait              block until the user answers or the round completes
+  reply             respond to one submission, note read from stdin`)
 	os.Exit(2)
 }
 
-// flags builds a flag set carrying the --workdir every subcommand needs. The
-// default holds the session outside any repo, so nothing has to be gitignored
-// and cleanup is a single rm.
+// defaultWorkdir must resolve identically for the user's shell and for a
+// sandboxed agent, whose TMPDIR is redirected elsewhere — so it cannot be
+// derived from the environment. Only the server writes here; clients just read
+// the address, which a sandbox permits.
+func defaultWorkdir() string {
+	return filepath.Join("/tmp", fmt.Sprintf("grilled-cheese-%d", os.Getuid()))
+}
+
+// flags builds a flag set carrying the --workdir every subcommand needs.
 func flags(name string, args []string, extra func(*flag.FlagSet)) (string, error) {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
-	dir := fs.String("workdir", filepath.Join(os.TempDir(), "grill"), "session directory")
+	dir := fs.String("workdir", defaultWorkdir(), "session directory")
 	if extra != nil {
 		extra(fs)
 	}
@@ -194,15 +202,12 @@ func checkFresh(workdir string) error {
 	if !mine.Stale(running) {
 		return nil
 	}
-	installer := filepath.Join(filepath.Dir(mine.Exe), "..", "..", "install.sh")
 	return fmt.Errorf("the running server is stale.\n"+
 		"  serving: %s (%s)\n"+
 		"  current: %s (%s)\n"+
-		"Restart it with:  systemctl --user restart grilled-cheese\n"+
-		"or reinstall:     %s",
+		"Point the service at the current binary with:  %s install-service",
 		running.Exe, running.Mod.Format(time.RFC3339),
-		mine.Exe, mine.Mod.Format(time.RFC3339),
-		filepath.Clean(installer))
+		mine.Exe, mine.Mod.Format(time.RFC3339), mine.Exe)
 }
 
 // ask reads a round as JSON on stdin and pushes it, printing the assigned

@@ -11,7 +11,7 @@
   "plugins": [
     {
       "name": "grilled-cheese",
-      "source": "./",
+      "source": "./plugin",
       "description": "Run a grilling session in a browser: clickable options, per-question threads, a live decision log, and vim keys. Ships a Go server the agent drives over ask/wait/reply.",
       "version": "0.1.0",
       "author": {
