@@ -22,15 +22,24 @@ die_sandboxed() {
   exit 1
 }
 
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
 binary=$(command -v grilled-cheese || true)
 if [ -z "$binary" ]; then
   if ! command -v go >/dev/null; then
     echo "grilled-cheese is not installed, and there is no Go toolchain to build it." >&2
-    echo "Install Go, then re-run this, or fetch a release binary onto your PATH." >&2
+    echo "Install Go, then re-run this, or put a release binary on your PATH." >&2
     exit 1
   fi
-  echo "installing $module ..."
-  go install "$module@latest"
+  if [ -f "$root/go.mod" ]; then
+    # The plugin carries its own source, so this works offline and while the
+    # repository is private.
+    echo "building grilled-cheese from $root ..."
+    (cd "$root" && go install .)
+  else
+    echo "installing $module ..."
+    go install "$module@latest"
+  fi
   binary=$(command -v grilled-cheese || echo "${GOBIN:-${GOPATH:-$HOME/go}/bin}/grilled-cheese")
 fi
 

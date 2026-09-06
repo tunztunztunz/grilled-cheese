@@ -1,0 +1,30 @@
+{
+  "name": "grilled-cheese",
+  "id": "grilled-cheese",
+  "owner": {
+    "name": "tunztunztunz"
+  },
+  "metadata": {
+    "description": "Matt Pocock's grilling method, in a browser instead of the terminal",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "grilled-cheese",
+      "source": "./",
+      "description": "Run a grilling session in a browser: clickable options, per-question threads, a live decision log, and vim keys. Ships a Go server the agent drives over ask/wait/reply.",
+      "version": "0.1.0",
+      "author": {
+        "name": "tunztunztunz"
+      },
+      "keywords": [
+        "grilling",
+        "design",
+        "decisions",
+        "planning",
+        "ui"
+      ],
+      "category": "workflow"
+    }
+  ]
+}
