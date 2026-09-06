@@ -264,9 +264,10 @@ func (s *server) handleNew(w http.ResponseWriter, r *http.Request) {
 	}), nil)
 }
 
-// handleSubmit records a user answer. Unknown, closed, and already-answered
-// questions are rejected, so a stale tab cannot submit twice, and an unknown
-// kind is rejected here because the page renders an entry by switching on it.
+// handleSubmit records a user answer, refusing anything the page could not have
+// produced — a stale tab's second submit, a closed question, a kind or an option
+// the page never offered. The checks live here because the API is reachable
+// without the page, which has no fallback for a value outside the ones it draws.
 func (s *server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		ID     string `json:"id"`
@@ -360,10 +361,9 @@ func (s *server) addRound(in askPayload) ([]string, error) {
 // handleReply records the agent's response to a submission and sets the
 // question's status, which is what tints the card and closes the round.
 //
-// It answers a submission and nothing else. Replying to a question the user has
-// not spoken on would settle it unasked — and since handleSubmit then refuses a
-// closed question, that both locks the user out and completes the round they
-// were meant to answer.
+// It answers a submission and nothing else: settling a question the user has not
+// spoken on closes their round for them, and since handleSubmit refuses a closed
+// question, leaves them no way to answer it.
 func (s *server) handleReply(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		ID     string `json:"id"`

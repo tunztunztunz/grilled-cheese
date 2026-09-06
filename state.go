@@ -71,8 +71,10 @@ type Round struct {
 	Questions []*Question `json:"questions"`
 }
 
-// Complete reports whether the round gate is open. An empty round never
-// completes, so a round pushed with no questions cannot unblock the next.
+// Complete reports whether every question in this round is settled. That is
+// half the gate on the next ask; State.RoundComplete carries the other half. An
+// empty round never completes, so a round pushed with no questions cannot
+// unblock the next.
 func (r *Round) Complete() bool {
 	if len(r.Questions) == 0 {
 		return false

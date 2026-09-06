@@ -127,8 +127,10 @@ func serve(args []string) error {
 	if err := os.WriteFile(addrPath, []byte(ln.Addr().String()), 0o644); err != nil {
 		return err
 	}
-	// A killed server cannot drop its addr file, which is why call() treats an
-	// unreachable address as a dead session rather than a transport failure.
+	// Dropping the addr on the way out stops a finished session advertising a
+	// port nothing answers on. SIGKILL skips this, which is why call() has to
+	// treat an unreachable address as a dead session rather than as a transport
+	// failure.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {
