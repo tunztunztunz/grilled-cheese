@@ -77,7 +77,9 @@ kbd {
 .log .rejected .tag { color: var(--red); }
 .log .what { color: var(--dim); }
 .log .what strong { color: var(--fg); font-weight: 500; display: block; }
-.empty { color: var(--dim); font-style: italic; }
+/* Spans both tracks of .log li: with no .tag to fill the first, the text would
+   otherwise be an anonymous grid item wrapping inside a 62px column. */
+.empty { color: var(--dim); font-style: italic; grid-column: 1 / -1; }
 
 /* ---------- rounds ---------- */
 main { padding: 34px var(--pad) 120px; display: grid; gap: 16px; max-width: 900px; margin: 0 auto; }
