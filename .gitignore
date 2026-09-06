@@ -4,6 +4,7 @@
 skills/grilled-cheese/grill
 
 # Harness, tooling and editor state that happens to share this directory.
+/.mock/
 /.claude/
 /.claude.json
 /.impeccable/

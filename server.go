@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,11 +16,16 @@ import (
 	"time"
 )
 
-// ui holds the browser assets, served from the binary so there is no static
+// assets holds the browser files, served from the binary so there is no static
 // directory to locate at runtime.
 //
-//go:embed index.html app.css app.js
-var ui embed.FS
+//go:embed assets
+var assets embed.FS
+
+// ui strips the assets/ prefix, so the page loads app.css and icon.png from /
+// as it does when opened straight off disk. fs.Sub only fails on a malformed
+// name, and this one is a constant.
+var ui, _ = fs.Sub(assets, "assets")
 
 // longPoll caps a blocked /state or /wait request. Browsers and the agent both
 // reconnect immediately, so this only has to stay under their idle timeouts.
