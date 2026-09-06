@@ -250,8 +250,8 @@ func currentBuild() build {
 	return b
 }
 
-// Stale reports whether other is running different code than this process.
-func (b build) Stale(other build) bool {
+// Differs reports whether other is running different code than this process.
+func (b build) Differs(other build) bool {
 	return b.Version != other.Version || b.Exe != other.Exe || !b.Mod.Equal(other.Mod)
 }
 
@@ -288,6 +288,11 @@ func (s *server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("question %q is awaiting an agent reply", in.ID)
 		case !in.Kind.Valid():
 			return fmt.Errorf("bad kind %q", in.Kind)
+		// Options are 1-based. An index outside the offered list would be stored
+		// and then rendered as "undefined" in the decision log, since the page
+		// resolves a pick by looking it up in the question's own options.
+		case in.Kind == KindOption && (in.Option < 1 || in.Option > len(question.Options)):
+			return fmt.Errorf("option %d is not one of the %d offered for %q", in.Option, len(question.Options), in.ID)
 		}
 		question.Entries = append(question.Entries, Entry{From: "user", Kind: in.Kind, Option: in.Option, Body: in.Body, At: time.Now()})
 		return nil
@@ -354,6 +359,11 @@ func (s *server) addRound(in askPayload) ([]string, error) {
 
 // handleReply records the agent's response to a submission and sets the
 // question's status, which is what tints the card and closes the round.
+//
+// It answers a submission and nothing else. Replying to a question the user has
+// not spoken on would settle it unasked — and since handleSubmit then refuses a
+// closed question, that both locks the user out and completes the round they
+// were meant to answer.
 func (s *server) handleReply(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		ID     string `json:"id"`
@@ -368,6 +378,8 @@ func (s *server) handleReply(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case question == nil:
 			return fmt.Errorf("unknown question %q", in.ID)
+		case !question.Pending():
+			return fmt.Errorf("question %q has no submission to reply to", in.ID)
 		case !in.Status.Valid():
 			return fmt.Errorf("bad status %q", in.Status)
 		}

@@ -42,6 +42,14 @@ func TestSession(t *testing.T) {
 	if code, _ := do("POST", "/submit", `{"id":"r1q1","kind":"shrug"}`); code != 400 {
 		t.Errorf("submit with unknown kind: got %d, want 400", code)
 	}
+	if code, _ := do("POST", "/submit", `{"id":"r1q2","kind":"option","option":9}`); code != 400 {
+		t.Errorf("submit an option that was never offered: got %d, want 400", code)
+	}
+	// Settling a question the user has not answered would complete the round on
+	// their behalf, and close the only door they had to answer it.
+	if code, _ := do("POST", "/reply", `{"id":"r1q1","status":"settled","note":"<p>no</p>"}`); code != 400 {
+		t.Errorf("reply with no submission to answer: got %d, want 400", code)
+	}
 
 	if code, _ := do("POST", "/submit", `{"id":"r1q2","kind":"option","option":1}`); code != 200 {
 		t.Fatal("submit r1q2")
@@ -114,8 +122,8 @@ func TestStaleBuild(t *testing.T) {
 		{"rebuilt in place", build{Exe: "/plugin/1.1.0/grill", Mod: now.Add(-time.Hour)}, true},
 		{"previous plugin version", build{Exe: "/plugin/1.0.0/grill", Mod: now}, true},
 	} {
-		if got := mine.Stale(tc.running); got != tc.stale {
-			t.Errorf("%s: Stale() = %v, want %v", tc.name, got, tc.stale)
+		if got := mine.Differs(tc.running); got != tc.stale {
+			t.Errorf("%s: Differs() = %v, want %v", tc.name, got, tc.stale)
 		}
 	}
 }

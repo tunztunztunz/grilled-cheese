@@ -71,10 +71,14 @@ function render() {
   renderLog(rounds);
 
   const t = focused && document.querySelector(`textarea[data-id="${focused}"]`);
-  if (t) t.focus(), t.setSelectionRange(caret, caret);
-  // Submitting removes the focused textarea without firing blur, which would
-  // otherwise strand the keyboard in insert mode.
-  else setMode("normal");
+  if (t) {
+    t.focus();
+    t.setSelectionRange(caret, caret);
+  } else {
+    // Submitting removes the focused textarea without firing blur, which would
+    // otherwise strand the keyboard in insert mode.
+    setMode("normal");
+  }
 }
 
 function card(q, i, live) {
@@ -156,8 +160,10 @@ function renderLog(rounds) {
   if (!decided.length) { log.append(el(`<li class="empty">Nothing settled yet.</li>`)); return; }
   decided.forEach(q => {
     const pick = q.entries?.findLast(e => e.kind === "option");
+    // Guarded as entry() guards it: the server rejects an out-of-range pick, but
+    // a state.json written before it did would otherwise log "undefined".
     const outcome = q.status === "rejected" ? "rejected"
-      : pick ? q.options[pick.option - 1]
+      : pick ? q.options?.[pick.option - 1] || `Option ${pick.option}`
       : q.entries?.findLast(e => e.from === "user")?.body || "settled";
     log.append(el(`<li class="${q.status}">
       <span class="tag">${q.id}</span>

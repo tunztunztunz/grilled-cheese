@@ -192,7 +192,7 @@ func checkFresh(workdir string) error {
 		return err
 	}
 	mine := startedAs
-	if !mine.Stale(running) {
+	if !mine.Differs(running) {
 		return nil
 	}
 	return fmt.Errorf("the running server is stale.\n"+
