@@ -41,7 +41,8 @@ login. `new` claims it: it clears whatever the last grilling left behind and
 opens the browser. Run it once, at the start of a session, and never
 mid-grilling — it discards the design tree.
 
-1. **Start.** Run `grilled-cheese new`. It clears any previous session, opens the user's browser and prints the URL. If it errors, the server is not running — see below.
+0. **Preflight, before anything else.** Run `grilled-cheese new` as your very first action — ahead of reading files, loading `grilling`, or dispatching sub-agents. If it fails, tell the user how to fix it **immediately**, in that same turn, and only then start gathering facts and drafting round 1. Never make them wait through minutes of preparation to find out a one-line install was needed.
+1. **Start.** `grilled-cheese new` clears any previous session, opens the user's browser and prints the URL.
 2. **Ask.** Push the whole frontier as one round. The server assigns IDs (`r1q1`, `r1q2`, …) and returns them.
 3. **Wait.** Run `grilled-cheese wait` in the **foreground**, with the longest timeout your tool allows. It blocks until the user acts. Never background it and never poll in a loop: a backgrounded process lands in a different network namespace and cannot see the server at all. If the tool call times out before the user answers, simply run it again — no state is lost.
 4. **Reply.** Answer *every* submission in the payload, one `grilled-cheese reply` each.
@@ -57,11 +58,17 @@ go install github.com/tunztunztunz/grilled-cheese@latest
 ```
 
 If `new` reports `cannot reach the session`, it is installed but no server is
-running. Run the installer **once**:
+running. Run the installer **once**.
+
+It sits two directories above this skill, so build the path from the base
+directory you were given when this skill loaded — never guess it, and never
+assume a checkout of the source exists on this machine:
 
 ```
-<plugin root>/install.sh
+<skill directory>/../../install.sh
 ```
+
+Give the user the resolved absolute path, not the template.
 
 It registers a systemd user service, so the server is up from login onward and
 this never comes up again. Do not try to host the server yourself first: a
