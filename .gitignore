@@ -1,0 +1,22 @@
+# Built binaries. Users get these from `go install`, not from the repo.
+/grilled-cheese
+/grill
+skills/grilled-cheese/grill
+
+# Harness, tooling and editor state that happens to share this directory.
+/.claude/
+/.claude.json
+/.claude-plugin/marketplace.json
+/.impeccable/
+/.ua/
+/.idea
+/.vscode
+/.mcp.json
+/.gitconfig
+/.gitmodules
+/.ripgreprc
+/.bashrc
+/.bash_profile
+/.profile
+/.zshrc
+/.zprofile

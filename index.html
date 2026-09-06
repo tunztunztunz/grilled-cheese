@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>grilled cheese</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body data-mode="normal">
+
+<header>
+  <h1>grilled cheese</h1>
+  <span id="progress"></span>
+  <nav>
+    <button id="btn-purpose" aria-expanded="false">Purpose <kbd>?</kbd></button>
+    <button id="btn-log" aria-expanded="false">Decisions <kbd>d</kbd></button>
+  </nav>
+</header>
+
+<section class="panel" id="panel-purpose" hidden><h2>Session purpose</h2><p id="purpose"></p></section>
+<section class="panel" id="panel-log" hidden><h2>Decision log</h2><ul class="log" id="log"></ul></section>
+
+<main id="rounds"></main>
+
+<footer>
+  <span id="mode">normal</span>
+  <span><kbd>j</kbd><kbd>k</kbd> move</span>
+  <span><kbd>1</kbd>–<kbd>9</kbd> pick</span>
+  <span><kbd>x</kbd> reject</span>
+  <span><kbd>i</kbd> answer</span>
+  <span><kbd>esc</kbd> back</span>
+  <span><kbd>/</kbd> next open</span>
+  <span><kbd>ctrl</kbd>+<kbd>↵</kbd> send</span>
+</footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>

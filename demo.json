@@ -1,0 +1,56 @@
+{
+  "purpose": "Fixture round for working on the UI without an agent attached. Exercises every card state: open with options, awaiting an agent reply, clarified but still open, settled, and rejected.",
+  "questions": [
+    {
+      "title": "Where does session state live?",
+      "body": "<p>Scratch state is meaningless once the session ends, but the docs phase reads from it. That pulls in two directions.</p><table><thead><tr><th>Location</th><th>Survives reboot</th><th>Pollutes repo</th></tr></thead><tbody><tr><td><code>$TMPDIR/grill</code></td><td>no</td><td>no</td></tr><tr><td><code>./.grill</code></td><td>yes</td><td>needs gitignore</td></tr><tr><td><code>~/.local/state</code></td><td>yes</td><td>no</td></tr></tbody></table>",
+      "options": [
+        "<code>$TMPDIR/grill</code> — ephemeral, cleanup is one <code>rm</code>",
+        "<code>./.grill</code> in the repo — survives, needs a gitignore line",
+        "<code>~/.local/state/grill</code> — XDG-correct, blocked by the sandbox"
+      ],
+      "recommended": 1
+    },
+    {
+      "title": "Should the agent long-poll or should we push?",
+      "body": "<p>Both consumers need to know when state moved. One primitive can serve them if the browser waits on a version and the agent waits on a predicate.</p><svg viewBox=\"0 0 320 90\" width=\"320\" height=\"90\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><rect x=\"1\" y=\"30\" width=\"78\" height=\"30\" rx=\"4\"/><rect x=\"121\" y=\"30\" width=\"78\" height=\"30\" rx=\"4\"/><rect x=\"241\" y=\"30\" width=\"78\" height=\"30\" rx=\"4\"/><path d=\"M79 45h42M199 45h42\" stroke-dasharray=\"3 3\"/></g><g fill=\"currentColor\" font-size=\"11\" text-anchor=\"middle\" font-family=\"inherit\"><text x=\"40\" y=\"49\">browser</text><text x=\"160\" y=\"49\">server</text><text x=\"280\" y=\"49\">agent</text><text x=\"100\" y=\"24\">/state</text><text x=\"220\" y=\"24\">/wait</text></g></svg>",
+      "options": ["One long-poll primitive, two projections", "Server-sent events", "Fixed-interval polling"],
+      "recommended": 1,
+      "entries": [
+        { "from": "user", "kind": "text", "body": "Does SSE not give us reconnect for free?", "at": "2026-09-05T18:04:00Z" },
+        { "from": "agent", "body": "<p>It does, but the agent still needs a blocking call it can background, and that is not SSE-shaped. One primitive covers both consumers; SSE would sit alongside it rather than replace it.</p>", "at": "2026-09-05T18:04:06Z" }
+      ]
+    },
+    {
+      "title": "Who assigns question IDs?",
+      "body": "<p>If the agent picks them, a typo silently splits a thread in two.</p>",
+      "options": ["The server, on ask", "The agent, in the round payload"],
+      "recommended": 1,
+      "status": "settled",
+      "entries": [
+        { "from": "user", "kind": "option", "option": 1, "at": "2026-09-05T18:05:00Z" },
+        { "from": "agent", "body": "<p>Recorded. <code>ask</code> returns the assigned IDs so the agent learns them rather than inventing them.</p>", "at": "2026-09-05T18:05:03Z" }
+      ]
+    },
+    {
+      "title": "Ship a bundled Mermaid runtime for diagrams?",
+      "body": "<p>Roughly 1MB of vendored JavaScript, in exchange for diagram syntax the agent already knows.</p>",
+      "options": ["Vendor mermaid.js", "Agent writes inline SVG"],
+      "recommended": 2,
+      "status": "rejected",
+      "entries": [
+        { "from": "user", "kind": "reject", "at": "2026-09-05T18:06:00Z" },
+        { "from": "agent", "body": "<p>Recorded as rejected. Diagrams stay as agent-authored inline SVG and the page keeps zero dependencies.</p>", "at": "2026-09-05T18:06:04Z" }
+      ]
+    },
+    {
+      "title": "What closes a grilling session?",
+      "body": "<p>The cleanup and docs pickers do not need their own UI — they are just a final round of ordinary questions.</p>",
+      "options": ["A final round of questions", "A dedicated wrap-up screen"],
+      "recommended": 1,
+      "entries": [
+        { "from": "user", "kind": "option", "option": 1, "at": "2026-09-05T18:07:00Z" }
+      ]
+    }
+  ]
+}

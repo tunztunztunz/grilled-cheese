@@ -1,0 +1,17 @@
+{
+  "name": "grilled-cheese",
+  "version": "0.1.0",
+  "description": "Run Matt Pocock's grilling method in a browser instead of the terminal: clickable options, per-question threads, a live decision log, and vim keys.",
+  "author": {
+    "name": "Dustin Simensen"
+  },
+  "license": "MIT",
+  "keywords": [
+    "grilling",
+    "design",
+    "decisions",
+    "planning",
+    "ui"
+  ],
+  "skills": "./skills/"
+}
