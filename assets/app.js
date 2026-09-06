@@ -3,12 +3,14 @@
 // Question bodies, options and agent notes are HTML the agent wrote, and are
 // injected as-is. Anything the user typed goes through esc().
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const el = (h, p = "innerHTML") => Object.assign(document.createElement("div"), { [p]: h }).firstElementChild;
+const el = h => Object.assign(document.createElement("div"), { innerHTML: h }).firstElementChild;
 const post = (path, body) =>
   fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
     .then(r => r.ok || r.text().then(t => Promise.reject(new Error(t))));
 
-const S = { version: -1, state: null, cursor: 0, drafts: {}, live: [] };
+const dots = `<span class="dots"><i></i><i></i><i></i></span>`;
+
+const S = { state: null, cursor: 0, drafts: {}, live: [] };
 
 /* ------------------------------------------------------------------ poll */
 
@@ -17,10 +19,8 @@ const S = { version: -1, state: null, cursor: 0, drafts: {}, live: [] };
 async function poll() {
   for (;;) {
     try {
-      const res = await fetch(`/state?since=${S.version}`);
-      const next = await res.json();
-      S.version = next.version;
-      S.state = next;
+      const res = await fetch(`/state?since=${S.state?.version ?? -1}`);
+      S.state = await res.json();
       render();
     } catch {
       await new Promise(r => setTimeout(r, 1000));
@@ -33,6 +33,8 @@ async function poll() {
 const pending = q => q.entries?.length && q.entries.at(-1).from === "user";
 
 function render() {
+  // A keypress can reach moveTo() before the first poll lands.
+  if (!S.state) return;
   const { purpose, rounds = [], roundComplete } = S.state;
 
   // Drafts and focus survive a re-render; the poll loop rebuilds the list
@@ -63,8 +65,8 @@ function render() {
     main.append(el(`<p class="round-label">Round ${latest.n}</p>`));
     S.live.forEach((q, i) => main.append(card(q, i, true)));
   }
-  if (!latest) main.append(el(`<div class="banner"><span class="dots"><i></i><i></i><i></i></span> Waiting for the first round</div>`));
-  else if (roundComplete) main.append(el(`<div class="banner"><span class="dots"><i></i><i></i><i></i></span> Round complete — the agent is deciding what to ask next</div>`));
+  if (!latest) main.append(el(`<div class="banner">${dots} Waiting for the first round</div>`));
+  else if (roundComplete) main.append(el(`<div class="banner">${dots} Round complete — the agent is deciding what to ask next</div>`));
 
   renderLog(rounds);
 
@@ -77,14 +79,16 @@ function render() {
 
 function card(q, i, live) {
   const n = i + 1;
-  const label = { settled: "settled", rejected: "rejected" }[q.status] || "";
+  const label = q.status === "open" ? "" : q.status;
   const node = el(`<article class="q" data-id="${q.id}" data-status="${q.status}">
     <h3><span class="n">${n}</span><span>${esc(q.title)}</span><span class="state">${label}</span></h3>
     <div class="body">${q.body || ""}</div>
   </article>`);
   if (live && i === S.cursor) node.dataset.cursor = "";
 
-  const chosen = q.entries?.find(e => e.kind === "option")?.option;
+  // findLast, not find: a question replied to with --status open stays open, so
+  // the user can pick again and only the latest choice is theirs.
+  const chosen = q.entries?.findLast(e => e.kind === "option")?.option;
   if (q.options?.length) {
     const ul = el(`<ul class="options"></ul>`);
     q.options.forEach((opt, j) => {
@@ -106,7 +110,7 @@ function card(q, i, live) {
 
   if (q.status !== "open") return node;
   if (pending(q)) {
-    node.append(el(`<div class="waiting"><span class="dots"><i></i><i></i><i></i></span> Thinking…</div>`));
+    node.append(el(`<div class="waiting">${dots} Thinking…</div>`));
     return node;
   }
 
@@ -151,7 +155,7 @@ function renderLog(rounds) {
   log.replaceChildren();
   if (!decided.length) { log.append(el(`<li class="empty">Nothing settled yet.</li>`)); return; }
   decided.forEach(q => {
-    const pick = q.entries?.find(e => e.kind === "option");
+    const pick = q.entries?.findLast(e => e.kind === "option");
     const outcome = q.status === "rejected" ? "rejected"
       : pick ? q.options[pick.option - 1]
       : q.entries?.findLast(e => e.from === "user")?.body || "settled";
