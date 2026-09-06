@@ -40,17 +40,18 @@ const waitInstructions = `Reply to every submission with: grilled-cheese reply -
 // server owns the session. It is the only writer to state.json, so the browser
 // and the agent both mutate through its handlers rather than the file.
 type server struct {
-	mu      sync.Mutex
-	state   State
-	version int
-	changed chan struct{} // closed and replaced on every mutation
-	path    string
+	mu       sync.Mutex
+	state    State
+	version  int
+	changed  chan struct{} // closed and replaced on every mutation
+	path     string
+	lastSeen time.Time // when a request last arrived; see idle
 }
 
 // newServer opens the session in workdir, resuming state.json when it exists.
 // A missing file is a new session, not an error.
 func newServer(workdir string) (*server, error) {
-	s := &server{changed: make(chan struct{}), path: filepath.Join(workdir, "state.json")}
+	s := &server{changed: make(chan struct{}), path: filepath.Join(workdir, "state.json"), lastSeen: time.Now()}
 	b, err := os.ReadFile(s.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, nil
@@ -109,7 +110,7 @@ func (s *server) waitFor(ctx context.Context, since int) int {
 // routes serves the embedded UI alongside two APIs that differ in who blocks on
 // them: the browser polls /state and posts /submit, the agent blocks on /wait
 // and posts /ask and /reply.
-func (s *server) routes() *http.ServeMux {
+func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	// The API patterns below are more specific, so they win over this catch-all.
 	mux.Handle("GET /", http.FileServerFS(ui))
@@ -122,7 +123,44 @@ func (s *server) routes() *http.ServeMux {
 	mux.HandleFunc("POST /submit", s.handleSubmit)
 	mux.HandleFunc("POST /ask", s.handleAsk)
 	mux.HandleFunc("POST /reply", s.handleReply)
-	return mux
+
+	// The mux is the one point every request passes, so stamping here is what
+	// lets idle tell an attached session from an abandoned one. The stamp is
+	// taken on arrival: a long poll blocks for up to a minute after it, which
+	// is an order of magnitude inside the idle window either way.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		s.lastSeen = time.Now()
+		s.mu.Unlock()
+		mux.ServeHTTP(w, r)
+	})
+}
+
+// idle closes its channel once no request has arrived for d. A server is
+// detached from whatever started it, so it outlives the agent session, the
+// terminal and the browser; where something is around to restart it, this is
+// what stops it sitting on a workdir the next `serve` would refuse to share.
+//
+// d belongs well above longPoll: an open page and a waiting agent each
+// reconnect within the minute, so anything larger cannot mistake one for an
+// absent one. It sleeps to the deadline rather than polling on a fixed tick, so
+// a request arriving mid-sleep simply pushes the deadline out on the next pass.
+func (s *server) idle(d time.Duration) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		for {
+			s.mu.Lock()
+			last := s.lastSeen
+			s.mu.Unlock()
+			if left := d - time.Since(last); left > 0 {
+				time.Sleep(left)
+				continue
+			}
+			close(done)
+			return
+		}
+	}()
+	return done
 }
 
 // stateView is the browser's projection of the session. Version is what the

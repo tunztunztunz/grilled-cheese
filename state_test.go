@@ -99,6 +99,34 @@ func TestStaleAddrFile(t *testing.T) {
 	}
 }
 
+// TestIdleExit is the check on the only thing that ever stops a detached
+// server. Both halves matter: a request has to push the window out, or a live
+// session gets reaped, and the window has to close, or nothing is reaped ever.
+func TestIdleExit(t *testing.T) {
+	s, err := newServer(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.routes()
+	done := s.idle(200 * time.Millisecond)
+
+	// since=-1 is already behind the current version, so this returns at once
+	// rather than blocking — it is a poll landing, not a waiter parking.
+	time.Sleep(120 * time.Millisecond)
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/state?since=-1", nil))
+	select {
+	case <-done:
+		t.Fatal("stopped while requests were still arriving")
+	case <-time.After(120 * time.Millisecond):
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a server nobody is attached to has to stop on its own")
+	}
+}
+
 // TestStaleBuild covers the trap a long-lived server sets: it keeps serving the
 // code it started as, so a rebuild or a versioned plugin path must be caught.
 func TestStaleBuild(t *testing.T) {
