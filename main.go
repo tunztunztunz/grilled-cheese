@@ -88,10 +88,12 @@ func flags(name string, args []string, extra func(*flag.FlagSet)) string {
 func serve(args []string) error {
 	var addr string
 	var demo, open bool
+	var idleAfter time.Duration
 	workdir := flags("serve", args, func(fs *flag.FlagSet) {
 		fs.StringVar(&addr, "addr", "127.0.0.1:0", "listen address")
 		fs.BoolVar(&demo, "demo", false, "seed a fixture round for UI work")
 		fs.BoolVar(&open, "open", true, "open the page in a browser")
+		fs.DurationVar(&idleAfter, "idle", 0, "stop after this long with no request (0: never)")
 	})
 
 	if err := os.MkdirAll(workdir, 0o755); err != nil {
@@ -131,8 +133,19 @@ func serve(args []string) error {
 	// unreachable address as a dead session rather than a transport failure.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// A nil channel blocks forever, which is what --idle 0 asks for. Idling out
+	// is opt-in because only the starter knows whether anything would bring the
+	// server back: a launcher that reruns this can afford it, a user at a prompt
+	// and a systemd unit whose Restart=on-failure ignores a clean exit cannot.
+	var idled <-chan struct{}
+	if idleAfter > 0 {
+		idled = s.idle(idleAfter)
+	}
 	go func() {
-		<-ctx.Done()
+		select {
+		case <-ctx.Done():
+		case <-idled:
+		}
 		os.Remove(addrPath)
 		os.Exit(0)
 	}()
