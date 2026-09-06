@@ -158,11 +158,13 @@ A rejection is an answer, not an error. Acknowledge it in one line and let the n
 
 The session is over when the frontier is empty: every branch of the design tree visited, nothing left silently assumed.
 
-**Do not act on the design until the user confirms you have reached shared understanding.** Ask that as the first question of the final round, ahead of the cleanup and document pickers (which are **ordinary questions with options**, since the UI already handles them). Then:
+**Do not act on the design until the user confirms you have reached shared understanding.** Ask that as the first question of the final round, ahead of the document pickers (which are **ordinary questions with options**, since the UI already handles them). Then:
 
 - Documents go in the repo: `docs/adr/` and `CONTEXT.md`, at the paths the `domain-modeling` skill uses, so it can pick up from here rather than finding a second set of decision files.
-- Session scratch is disposable: `rm -rf "${TMPDIR:-/tmp}/grill"` once the user confirms.
+- Nothing to clean up. `grilled-cheese new` clears the state at the start of the next grilling. Leave the session directory in place: deleting it removes the `addr` file, which a running server never rewrites, so every later command loses the session.
 
 ## Session directory
 
-Everything lives in `${TMPDIR:-/tmp}/grill`, outside the repo, so there is nothing to gitignore. Pass the same `--workdir` to every subcommand to run a second session, or to put one somewhere it survives a reboot.
+`/tmp/grilled-cheese-<uid>` by default, outside the repo, so there is nothing to gitignore. The path is fixed rather than read from `$TMPDIR`, so it resolves the same for the user's shell and for a sandboxed agent whose `$TMPDIR` points somewhere else.
+
+The long-running server owns this directory. `state.json` is the session, and `addr` carries the port that `ask`, `wait` and `reply` dial. Pass the same `--workdir` to every subcommand to run a second session alongside the first.
