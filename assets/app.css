@@ -2,10 +2,10 @@
   /* Warm greys, so the icon reads as part of the page rather than pasted on. */
   --bg: #14100e; --panel: #1b1613; --raise: #221b17;
   --line: #302722; --fg: #ece3da; --dim: #a2948a;
-  /* --accent is the icon's own yellow and means "act now": cursor, focus,
-     send, recommended. Green and red mean settled and rejected, and are the
-     only colours read without reading text — keep all three above 35° apart
-     in hue or the status bar stops being legible at a glance. */
+  /* --accent is the icon's own yellow and is the page's only highlight: every
+     interactive and emphasised element takes it. Green and red mean settled and
+     rejected, and are the only colours read without reading text: keep all three
+     above 35° apart in hue or the status bar stops being legible at a glance. */
   --accent: #fce40f; --green: #63c07f; --red: #e0596b;
   /* Text on an accent fill. The one value that cannot be derived: it has to
      invert when --accent is light. */
