@@ -5,42 +5,42 @@ browser instead of the terminal.
 
 An agent interviews you about a plan one round at a time. Each question lands as
 a card with clickable options, a text box for a follow-up, and an outright
-reject. Answers get a reply threaded underneath, the card tints green or red
-when it settles, and a decision log builds as you go. Vim keys throughout.
+reject. Each answer gets a threaded reply, the card tints green or red as it
+settles, and a decision log builds as you go. Vim keys throughout.
 
-The round gate is enforced by the server: no new questions arrive until you have
+The server enforces the round gate: no new questions arrive until you have
 answered every one on screen.
 
 ## Install
 
 Two pieces, installed once each.
 
-**The app** — a single Go binary that serves the UI and owns session state:
+**The app**, a single Go binary that serves the UI and owns session state:
 
 ```sh
 go install github.com/tunztunztunz/grilled-cheese@latest
 grilled-cheese install-service
 ```
 
-`install-service` registers a systemd user service, so a server is running from
-login onward. Without systemd, run `grilled-cheese serve` however you keep
-background processes.
+`install-service` registers a systemd user service, so a server runs from login
+onward. Without systemd, run `grilled-cheese serve` however you keep background
+processes.
 
-**The plugin** — the agent-facing half:
+**The plugin**, the agent-facing half:
 
 ```sh
 claude plugin marketplace add tunztunztunz/grilled-cheese
 claude plugin install grilled-cheese@grilled-cheese
 ```
 
-Then `/grilled-cheese <what you want stress-tested>` in any project.
+Run `/grilled-cheese <what you want stress-tested>` in any project.
 
 ## Why the app is separate
 
 An agent cannot host this itself. Its processes are killed when each tool call
-ends, and its network namespace is unreachable from a browser — so the server has
-to be an ordinary background service owned by your login session. The plugin
-carries only `SKILL.md`; it ships no binary and no source.
+ends, and its network namespace is unreachable from a browser. The server has to
+be an ordinary background service owned by your login session. The plugin
+carries only `SKILL.md`: no binary, no source.
 
 ## Commands
 
@@ -53,17 +53,17 @@ carries only `SKILL.md`; it ships no binary and no source.
 | `wait` | block until the user answers or the round completes |
 | `reply` | respond to one submission, HTML note on stdin |
 
-`new`, `ask`, `wait` and `reply` are the agent's; you only ever need the first
-two. Session state lives in `/tmp/grilled-cheese-$UID` and survives restarts.
+You run `install-service`, or `serve` without systemd. The rest are the agent's.
+Session state lives in `/tmp/grilled-cheese-$UID` and survives restarts.
 
-## Working on it
+## Building and testing
 
 ```sh
 go test ./...
 go build -o grilled-cheese . && ./grilled-cheese serve --demo
 ```
 
-`--demo` seeds a fixture round covering every card state, so the UI can be
-worked on without an agent attached. The page is compiled into the binary with
-`go:embed`, so rebuild after editing `index.html`, `app.css` or `app.js` — and
+`--demo` seeds a fixture round of open, settled and rejected cards, so you can
+work on the UI without an agent attached. The page is compiled into the binary
+with `go:embed`. Rebuild after editing `index.html`, `app.css` or `app.js`, then
 re-run `install-service` to move the running service onto the new binary.
