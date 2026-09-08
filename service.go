@@ -57,9 +57,8 @@ WantedBy=default.target
 		}
 	}
 
-	addrPath := filepath.Join(workdir, "addr")
 	for range 20 {
-		if b, err := os.ReadFile(addrPath); err == nil {
+		if b, err := os.ReadFile(addrPath(workdir)); err == nil {
 			fmt.Printf("grilled cheese is serving http://%s\n", b)
 			fmt.Printf("unit:    %s\n", unit)
 			fmt.Printf("session: %s\n", workdir)
@@ -81,5 +80,5 @@ func configHome() string {
 // outsideSandbox names the one cause worth acting on: writing a unit and talking
 // to systemd both need access an agent's sandbox denies.
 func outsideSandbox(err error) error {
-	return fmt.Errorf("%w\n\nThis has to run outside an agent sandbox — ask the user to run it in their own terminal.", err)
+	return fmt.Errorf("%w\n\nThis has to run outside an agent sandbox: ask the user to run it in their own terminal", err)
 }

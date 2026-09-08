@@ -34,10 +34,19 @@ func (k Kind) Valid() bool {
 	return k == KindOption || k == KindReject || k == KindText
 }
 
+// From is who spoke in a thread entry. Only the server writes it, so unlike
+// Status and Kind it needs no Valid.
+type From string
+
+const (
+	FromUser  From = "user"
+	FromAgent From = "agent"
+)
+
 // Entry is one turn in a question's thread. Kind and Option carry meaning only
-// when From is "user".
+// when From is FromUser.
 type Entry struct {
-	From   string    `json:"from"` // "user" or "agent"
+	From   From      `json:"from"`
 	Kind   Kind      `json:"kind,omitempty"`
 	Option int       `json:"option,omitempty"`
 	Body   string    `json:"body,omitempty"`
@@ -61,7 +70,7 @@ type Question struct {
 // alternates, so an unanswered submission is one the user spoke last on.
 func (q *Question) Pending() bool {
 	n := len(q.Entries)
-	return n > 0 && q.Entries[n-1].From == "user"
+	return n > 0 && q.Entries[n-1].From == FromUser
 }
 
 // Round is one batch of questions answered together. Rounds are numbered from

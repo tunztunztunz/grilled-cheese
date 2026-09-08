@@ -70,6 +70,13 @@ func defaultWorkdir() string {
 	return filepath.Join("/tmp", fmt.Sprintf("grilled-cheese-%d", os.Getuid()))
 }
 
+// addrPath is where serve publishes its listen address. Every other subcommand
+// dials the port it finds here, so the four readers and the one writer agree on
+// the name from one place.
+func addrPath(workdir string) string {
+	return filepath.Join(workdir, "addr")
+}
+
 // flags parses the --workdir every subcommand needs. ExitOnError means a bad
 // flag exits here, so there is no parse error for callers to handle.
 func flags(name string, args []string, extra func(*flag.FlagSet)) string {
@@ -102,7 +109,7 @@ func serve(args []string) error {
 	// a direct dial: a server outside this network namespace answers only over
 	// the proxy route, and missing it would clobber a live session's addr file.
 	if _, err := call(workdir, "GET", "/state?since=-1", nil); err == nil {
-		live, _ := os.ReadFile(filepath.Join(workdir, "addr"))
+		live, _ := os.ReadFile(addrPath(workdir))
 		return fmt.Errorf("a session is already serving %s at http://%s", workdir, live)
 	}
 	s, err := newServer(workdir)
@@ -123,8 +130,7 @@ func serve(args []string) error {
 	if err != nil {
 		return err
 	}
-	addrPath := filepath.Join(workdir, "addr")
-	if err := os.WriteFile(addrPath, []byte(ln.Addr().String()), 0o644); err != nil {
+	if err := os.WriteFile(addrPath(workdir), []byte(ln.Addr().String()), 0o644); err != nil {
 		return err
 	}
 	// Dropping the addr on the way out stops a finished session advertising a
@@ -135,7 +141,7 @@ func serve(args []string) error {
 	defer stop()
 	go func() {
 		<-ctx.Done()
-		os.Remove(addrPath)
+		os.Remove(addrPath(workdir))
 		os.Exit(0)
 	}()
 
@@ -173,7 +179,7 @@ func newCmd(args []string) error {
 	if _, err := call(workdir, "POST", "/new", struct{}{}); err != nil {
 		return err
 	}
-	addr, err := os.ReadFile(filepath.Join(workdir, "addr"))
+	addr, err := os.ReadFile(addrPath(workdir))
 	if err != nil {
 		return err
 	}
@@ -270,7 +276,7 @@ func reply(args []string) error {
 // workdir. Any status at or above 400 returns as an error carrying the server's
 // message, so a rejected mutation reaches the caller's exit code.
 func call(workdir, method, path string, body any) ([]byte, error) {
-	addr, err := os.ReadFile(filepath.Join(workdir, "addr"))
+	addr, err := os.ReadFile(addrPath(workdir))
 	if err != nil {
 		return nil, fmt.Errorf("no session in %s: is `grilled-cheese serve` running?", workdir)
 	}

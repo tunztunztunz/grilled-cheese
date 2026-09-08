@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -98,7 +97,7 @@ func TestSession(t *testing.T) {
 func TestStaleAddrFile(t *testing.T) {
 	dir := t.TempDir()
 	// Port 1 is reserved and never listening, so this refuses immediately.
-	if err := os.WriteFile(filepath.Join(dir, "addr"), []byte("127.0.0.1:1"), 0o644); err != nil {
+	if err := os.WriteFile(addrPath(dir), []byte("127.0.0.1:1"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err := call(dir, "GET", "/wait", nil)

@@ -295,7 +295,7 @@ func (s *server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		case in.Kind == KindOption && (in.Option < 1 || in.Option > len(question.Options)):
 			return fmt.Errorf("option %d is not one of the %d offered for %q", in.Option, len(question.Options), in.ID)
 		}
-		question.Entries = append(question.Entries, Entry{From: "user", Kind: in.Kind, Option: in.Option, Body: in.Body, At: time.Now()})
+		question.Entries = append(question.Entries, Entry{From: FromUser, Kind: in.Kind, Option: in.Option, Body: in.Body, At: time.Now()})
 		return nil
 	})
 	respond(w, err, nil)
@@ -384,7 +384,7 @@ func (s *server) handleReply(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("bad status %q", in.Status)
 		}
 		question.Status = in.Status
-		question.Entries = append(question.Entries, Entry{From: "agent", Body: in.Note, At: time.Now()})
+		question.Entries = append(question.Entries, Entry{From: FromAgent, Body: in.Note, At: time.Now()})
 		return nil
 	})
 	respond(w, err, nil)
