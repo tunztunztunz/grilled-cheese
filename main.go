@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 )
@@ -53,7 +54,7 @@ func main() {
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage: grilled-cheese <command> [flags]
 
-  install-service   register a systemd user service and start it
+  install-service   register a per-user background service and start it
   serve             host the UI and own the session state
   new               clear the session and open the page in a browser
   ask               push a round of questions, read as JSON on stdin
@@ -162,6 +163,9 @@ func show(page string) {
 	launcher := os.Getenv("BROWSER")
 	if launcher == "" {
 		launcher = "xdg-open"
+		if runtime.GOOS == "darwin" {
+			launcher = "open"
+		}
 	}
 	if err := exec.Command(launcher, page).Start(); err != nil {
 		log.Printf("could not open a browser (%v) — visit %s", err, page)

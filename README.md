@@ -22,9 +22,9 @@ go install github.com/tunztunztunz/grilled-cheese@latest
 grilled-cheese install-service
 ```
 
-`install-service` registers a systemd user service, so a server runs from login
-onward. Without systemd, run `grilled-cheese serve` however you keep background
-processes.
+`install-service` registers a user service — systemd on Linux, launchd on macOS
+— so a server runs from login onward. With neither, run `grilled-cheese serve`
+however you keep background processes.
 
 **The plugin**, the agent-facing half:
 
@@ -46,14 +46,15 @@ carries only `SKILL.md`: no binary, no source.
 
 | | |
 |---|---|
-| `install-service` | register a systemd user service and start it |
+| `install-service` | register a user service and start it |
 | `serve` | host the UI and own session state |
 | `new` | clear the session and open the page |
 | `ask` | push a round of questions, JSON on stdin |
 | `wait` | block until the user answers or the round completes |
 | `reply` | respond to one submission, HTML note on stdin |
 
-You run `install-service`, or `serve` without systemd. The rest are the agent's.
+You run `install-service`, or `serve` without a service manager. The rest are the
+agent's.
 Session state lives in `/tmp/grilled-cheese-$UID` and survives restarts.
 
 ## Building and testing

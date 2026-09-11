@@ -59,7 +59,7 @@ mid-grilling: it discards the design tree.
 
 If `new` reports `command not found`, the app is not installed. It is a separate
 install from this plugin, and the user has to run both lines themselves. An
-agent sandbox can reach neither Go's install target nor systemd:
+agent sandbox can reach neither Go's install target nor the service manager:
 
 ```
 go install github.com/tunztunztunz/grilled-cheese@latest
@@ -86,8 +86,8 @@ routable.
 Run every command in the **foreground**. A backgrounded `wait` lands in a
 different network namespace and cannot see the server at all.
 
-When the server runs under systemd, startup failures go to
-`journalctl --user -u grilled-cheese`.
+Startup failures go to `journalctl --user -u grilled-cheese` under systemd, and
+to `/tmp/grilled-cheese-$UID/log` under launchd on macOS.
 
 The server enforces the round gate: `ask` fails while any question is open. That is deliberate: the user answers a whole round before the next appears.
 
