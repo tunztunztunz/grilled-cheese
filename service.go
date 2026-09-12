@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -21,7 +22,10 @@ const serviceName = "grilled-cheese"
 // The unit points at this executable, so re-running after an upgrade is what
 // moves the service onto the new binary.
 func installService(args []string) error {
-	workdir := flags("install-service", args, nil)
+	var addr string
+	workdir := flags("install-service", args, func(fs *flag.FlagSet) {
+		fs.StringVar(&addr, "addr", defaultAddr, "listen address baked into the unit")
+	})
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -36,7 +40,7 @@ func installService(args []string) error {
 	if runtime.GOOS == "darwin" {
 		install = installLaunchd
 	}
-	unit, logs, err := install(exe, workdir)
+	unit, logs, err := install(exe, workdir, addr)
 	if err != nil {
 		return err
 	}
@@ -44,6 +48,9 @@ func installService(args []string) error {
 	for range 20 {
 		if b, err := os.ReadFile(addrPath(workdir)); err == nil {
 			fmt.Printf("grilled cheese is serving http://%s\n", b)
+			if url := lanURL(addr); url != "" {
+				fmt.Printf("on this network: %s\n", url)
+			}
 			fmt.Printf("unit:    %s\n", unit)
 			fmt.Printf("session: %s\n", workdir)
 			fmt.Println("it starts automatically from now on; re-run this after an upgrade")
@@ -56,7 +63,7 @@ func installService(args []string) error {
 
 // installSystemd writes a systemd user unit and starts it, returning the unit
 // path and the command that shows why a failed start failed.
-func installSystemd(exe, workdir string) (string, string, error) {
+func installSystemd(exe, workdir, addr string) (string, string, error) {
 	logs := fmt.Sprintf("journalctl --user -u %s -n 20", serviceName)
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		return "", logs, fmt.Errorf("no service manager on this machine — leave this running instead:\n  %s serve --workdir %s", exe, workdir)
@@ -70,13 +77,13 @@ func installSystemd(exe, workdir string) (string, string, error) {
 Description=grilled cheese grilling UI
 
 [Service]
-ExecStart=%s serve --open=false --workdir %s
+ExecStart=%s serve --open=false --addr %s --workdir %s
 Restart=on-failure
 RestartSec=2
 
 [Install]
 WantedBy=default.target
-`, exe, workdir)
+`, exe, addr, workdir)
 	if err := os.WriteFile(unit, []byte(body), 0o644); err != nil {
 		return "", logs, outsideSandbox(err)
 	}
@@ -95,7 +102,7 @@ WantedBy=default.target
 // installLaunchd writes a launchd user agent and starts it, returning the plist
 // path and the command that shows why a failed start failed. launchd keeps no
 // journal of its own, so the job's output goes to a file in the workdir.
-func installLaunchd(exe, workdir string) (string, string, error) {
+func installLaunchd(exe, workdir, addr string) (string, string, error) {
 	log := filepath.Join(workdir, "log")
 	logs := "tail -n 20 " + log
 
@@ -114,6 +121,8 @@ func installLaunchd(exe, workdir string) (string, string, error) {
 		<string>%s</string>
 		<string>serve</string>
 		<string>--open=false</string>
+		<string>--addr</string>
+		<string>%s</string>
 		<string>--workdir</string>
 		<string>%s</string>
 	</array>
@@ -123,7 +132,7 @@ func installLaunchd(exe, workdir string) (string, string, error) {
 	<key>StandardErrorPath</key><string>%s</string>
 </dict>
 </plist>
-`, serviceName, exe, workdir, log, log)
+`, serviceName, exe, addr, workdir, log, log)
 	if err := os.WriteFile(plist, []byte(body), 0o644); err != nil {
 		return "", logs, outsideSandbox(err)
 	}

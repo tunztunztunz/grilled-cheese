@@ -26,6 +26,31 @@ grilled-cheese install-service
 — so a server runs from login onward. With neither, run `grilled-cheese serve`
 however you keep background processes.
 
+## Answering from your phone
+
+By default the server listens on `127.0.0.1:7331` and nothing else on the
+network can see it. To answer a grilling from another device on the same wifi,
+bind it wider:
+
+```sh
+grilled-cheese install-service --addr 0.0.0.0:7331
+```
+
+The server then claims `grilled-cheese.local` over mDNS, so the page is at
+**http://grilled-cheese.local:7331** from any browser on the network. It answers
+the lookups itself — nothing to register in Bonjour on macOS, no avahi needed on
+Linux.
+
+Once the page loads, save it as an app icon so you never type the address
+again. On iOS, Share → **Add to Home Screen**; on Android, Chrome's ⋮ menu →
+**Add to Home screen**. Both launch it full-screen without browser chrome,
+which buys back the space the URL bar was taking from the cards.
+
+There is no login. Anyone on the same network can read the session and answer
+its questions, so this is for networks you trust. Leave the default loopback
+bind on networks you don't. For answering away from home, put the machine on a
+VPN such as Tailscale and reach it by its VPN address.
+
 **The plugin**, the agent-facing half:
 
 ```sh
@@ -46,7 +71,7 @@ carries only `SKILL.md`: no binary, no source.
 
 | | |
 |---|---|
-| `install-service` | register a user service and start it |
+| `install-service` | register a user service and start it, `--addr` to bind it |
 | `serve` | host the UI and own session state |
 | `new` | clear the session and open the page |
 | `ask` | push a round of questions, JSON on stdin |

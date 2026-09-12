@@ -24,8 +24,13 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/pion/mdns/v2"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 )
 
 //go:embed demo.json
@@ -78,6 +83,56 @@ func addrPath(workdir string) string {
 	return filepath.Join(workdir, "addr")
 }
 
+// The port is fixed rather than ephemeral so a connected device can keep a bookmark across
+// restarts, and mdnsName is what that bookmark says. A session bound to
+// loopback never claims the name.
+const (
+	defaultAddr = "127.0.0.1:7331"
+	mdnsName    = serviceName + ".local"
+)
+
+// lanURL reports the name-based URL for a listen address, empty when that
+// address is loopback-only and so unreachable from another device.
+func lanURL(addr string) string {
+	a, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil || a.IP.IsLoopback() {
+		return ""
+	}
+	return fmt.Sprintf("http://%s:%d", mdnsName, a.Port)
+}
+
+// publishMDNS answers multicast lookups for name, which is what lets a phone
+// reach the session by name with no Bonjour registration on macOS and no avahi
+// on Linux. The responder answers with the address of whichever interface the
+// query arrived on, keeping a docker bridge or a VPN address out of the reply.
+func publishMDNS(name string) error {
+	addr4, err := net.ResolveUDPAddr("udp4", mdns.DefaultAddressIPv4)
+	if err != nil {
+		return err
+	}
+	addr6, err := net.ResolveUDPAddr("udp6", mdns.DefaultAddressIPv6)
+	if err != nil {
+		return err
+	}
+	// 5353 is shared with mDNSResponder and with every other Bonjour speaker on
+	// the machine, so these sockets must tolerate company.
+	l4, err := net.ListenUDP("udp4", addr4)
+	if err != nil {
+		return err
+	}
+	l6, err := net.ListenUDP("udp6", addr6)
+	if err != nil {
+		l4.Close()
+		return err
+	}
+	if _, err := mdns.NewServer(ipv4.NewPacketConn(l4), ipv6.NewPacketConn(l6), mdns.WithLocalNames(name)); err != nil {
+		l4.Close()
+		l6.Close()
+		return err
+	}
+	return nil
+}
+
 // flags parses the --workdir every subcommand needs. ExitOnError means a bad
 // flag exits here, so there is no parse error for callers to handle.
 func flags(name string, args []string, extra func(*flag.FlagSet)) string {
@@ -97,7 +152,7 @@ func serve(args []string) error {
 	var addr string
 	var demo, open bool
 	workdir := flags("serve", args, func(fs *flag.FlagSet) {
-		fs.StringVar(&addr, "addr", "127.0.0.1:0", "listen address")
+		fs.StringVar(&addr, "addr", defaultAddr, "listen address")
 		fs.BoolVar(&demo, "demo", false, "seed a fixture round for UI work")
 		fs.BoolVar(&open, "open", true, "open the page in a browser")
 	})
@@ -131,7 +186,15 @@ func serve(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(addrPath(workdir), []byte(ln.Addr().String()), 0o644); err != nil {
+	// Clients dial whatever lands in the addr file, and a wildcard bind's own
+	// "0.0.0.0:port" would route them off-loopback to reach a server on this very
+	// machine. Only the port is theirs to learn.
+	tcp := ln.Addr().(*net.TCPAddr)
+	local := ln.Addr().String()
+	if tcp.IP.IsUnspecified() {
+		local = net.JoinHostPort("127.0.0.1", strconv.Itoa(tcp.Port))
+	}
+	if err := os.WriteFile(addrPath(workdir), []byte(local), 0o644); err != nil {
 		return err
 	}
 	// Dropping the addr on the way out stops a finished session advertising a
@@ -146,11 +209,20 @@ func serve(args []string) error {
 		os.Exit(0)
 	}()
 
-	page := "http://" + ln.Addr().String()
+	page := "http://" + local
 	if open {
 		show(page)
 	} else {
 		fmt.Println(page)
+	}
+	// A name is only worth claiming once the listener answers off-box; a failure
+	// to claim it costs nothing, since the address above still reaches the page.
+	if url := lanURL(ln.Addr().String()); url != "" {
+		if err := publishMDNS(mdnsName); err != nil {
+			log.Printf("no mDNS name (%v) — reach this session at port %d on this machine's address", err, tcp.Port)
+		} else {
+			fmt.Println("on this network: " + url)
+		}
 	}
 	return http.Serve(ln, s.routes())
 }
